@@ -95,6 +95,8 @@ Prints PASS/FAIL per case and overall score (e.g., 4/5 passed).
 | **Reflection** | ✅ Included at end of README |
 
 ---
+## Watch the demo on loom
+https://www.loom.com/share/79d42b7b3f9f478390cb7a1c38d9cd22
 
 ## 🚀 Getting Started
 
