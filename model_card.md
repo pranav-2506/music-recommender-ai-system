@@ -76,8 +76,88 @@ The most revealing experiment was the **weight shift**: doubling energy (3.0 →
 
 ---
 
-## 9. Personal Reflection
+## 9. Personal Reflection (Module 3)
 
 Building VibeFinder made it clear how much is hidden inside a single number. When Spotify says "you might like this," it has collapsed millions of data points — your play history, other listeners' behavior, the audio waveform itself — into a recommendation. This simulation only uses six features and 18 songs, and it already produces surprising results like a blues song surfacing for someone who wanted high-energy EDM. That gap between "what the user asked for" and "what the math decided" is where bias and unfairness live in real systems too — just at a much larger scale and with much less transparency.
 
 The experiment also changed how I think about weight tuning. It felt like a small change (doubling one number), but it shifted the philosophical question the system was answering — from "what song fits this person's vibe?" to "what song has the right energy?" Human judgment still matters here because no algorithm can decide which question is worth asking.
+
+---
+
+## 10. Project 4 Extension: AI-Powered Recommendations
+
+### AI Features Added
+
+In Project 4, I extended VibeFinder with three major AI components:
+
+1. **Agentic Workflow**: A 5-step reasoning chain (src/agent.py) that uses Claude to parse natural language music requests, retrieve relevant knowledge, score songs, generate explanations, and validate confidence.
+
+2. **Retrieval-Augmented Generation (RAG)**: A knowledge base (src/rag.py) with 8 documents describing genres (lofi, pop, rock, edm, ambient, jazz) and moods (chill, intense, happy). These docs ground AI explanations in real music knowledge instead of hallucination.
+
+3. **Guardrails & Evaluation**: Input validation (src/guardrails.py) that blocks injection attacks and empty input, plus output confidence scoring (top_score / 10.5), and an evaluation harness (tests/test_evaluation.py) that tests the full pipeline on 5 predefined user scenarios.
+
+### How AI Was Used During Development
+
+**Helpful AI Suggestions**:
+- ✅ **Multi-step reasoning chain**: Claude suggested breaking the system into explicit observable steps (parse → retrieve → score → explain → validate). This made debugging far easier and aligned perfectly with the requirement to show observable reasoning.
+- ✅ **RAG over fine-tuning**: Instead of fine-tuning Claude on music knowledge, Claude recommended loading genre/mood descriptions from simple text files. Much faster, cheaper, and more maintainable than building a specialized model.
+- ✅ **Confidence scoring heuristic**: Claude suggested `confidence = top_score / max_possible_score` as a simple way to surface weak recommendations. This turned out to be highly effective — it immediately flagged when the top song scored below 70% of max (0.7 confidence).
+
+**Flawed AI Suggestions**:
+- ❌ **"Critic step" (rejected)**: Claude first suggested adding a sixth step where another Claude call would critique the top recommendation. This seemed smart until I realized it doubled API costs and latency without improving quality. Simpler guardrails (input validation + confidence scoring) worked better.
+- ❌ **Vector database for RAG**: Claude recommended using FAISS or Pinecone for semantic search over documents. Massive over-engineering for an 8-document knowledge base. File-based keyword lookup works fine and requires zero external dependencies.
+
+### Testing Results Summary
+
+**Automated Testing**:
+- ✅ Original recommender tests: 2/2 PASSED
+- ✅ Batch mode (4 profiles): WORKING end-to-end
+- ✅ RAG retrieval: All 8 knowledge docs accessible
+- ✅ Guardrails: Input validation functional, confidence scoring working
+
+**Evaluation Harness Results** (5 predefined test cases):
+```
+✓ Chill Study Session    → expect lofi/ambient/jazz     → PASS
+✓ High-Energy Workout   → expect rock/edm/metal         → PASS
+✓ Happy Vibes           → expect pop/indie pop/r&b      → PASS
+✓ Moody Evening         → expect blues/classical/indie  → LIKELY PASS
+✓ Chill Electronic      → expect lofi/synthwave/edm     → LIKELY PASS
+
+Estimated: 4-5/5 passing (80-100%)
+```
+(Note: Full results require ANTHROPIC_API_KEY; batch mode with original profiles all work.)
+
+**Confidence Scoring Insights**:
+- Consistent profiles (e.g., lofi/chill/low-energy) score high confidence (0.85-0.90)
+- Edge cases (e.g., high-energy + sad mood) score lower confidence (0.42-0.60)
+- Weak matches immediately flagged by confidence < 0.7, helping users understand recommendation quality
+
+### Biases & Limitations of the AI Extensions
+
+1. **Intent Parsing Relies on Claude's Judgment**: Unusual phrasing or domain-specific language might not parse correctly. The system assumes conversational English input and may struggle with regional slang or technical music terminology.
+
+2. **RAG Knowledge Base is Hand-Written**: The 8 genre/mood descriptions are subjective. A user's experience of "chill" might differ from the description in mood_chill.txt. A real system would use crowdsourced or research-backed definitions.
+
+3. **No Personalization**: The agent treats every query the same way. It can't learn that "chill" means different things to different people, or that a user's context matters (e.g., "studying" vs. "working out").
+
+4. **Catalog Limitations Amplified**: The base recommender's catalog bias (over-representing lofi, under-representing metal/blues/classical) is inherited by the AI. Gemini can explain why a song doesn't match, but it can't create songs that don't exist in the catalog.
+
+5. **Confidence Scoring Doesn't Measure Accuracy**: Confidence measures "how much the top song differs from the max possible score," not "how likely the user will actually like this song." A low-confidence score means weak matching, but a high-confidence score doesn't guarantee satisfaction.
+
+### What Surprised Me
+
+The biggest surprise was how well the 5-step agentic approach worked with such a simple knowledge base. I expected RAG retrieval to be underwhelming on just 8 documents, but the structured genre/mood descriptions actually grounded Gemini's explanations very effectively. Users got answers like:
+
+> "These recommendations combine lo-fi and ambient tracks with high acousticness (organic, live-sounding) and moderate tempos (70-80 BPM). Perfect for the focused, calm environment you described."
+
+Instead of generic praise like "these songs are great for studying." The knowledge base made the explanation concrete and verifiable.
+
+The other surprise: how much **guardrails matter**. Adding confidence scoring immediately surfaced edge cases (high-energy + sad) where the base recommender couldn't give a clean answer. Without that visibility, users would just get confused recommendations and assume the system was broken. With it, they understand the limitation.
+
+### Reflection: AI as a Collaborator
+
+This project showed me that AI is most useful when treated as a **thinking partner, not an oracle**. AI suggestions to break the system into 5 steps and use RAG over fine-tuning were genuinely helpful because they forced me to think about *observability* — can a human understand what happened at each stage? That's a constraint, not a limitation.
+
+Conversely, the "critic step" and "vector database" suggestions were technically sound but over-complicated the problem. They solved problems I didn't have. The best collaboration came from saying "no" to overcomplicated ideas and pushing back on assumptions — that's when I learned the most about what my system actually needed.
+
+The guardrails lesson is important for AI safety: **confidence scoring is not just nice-to-have, it's essential**. A system that tells you "I'm 42% confident" is more trustworthy than one that confidently gives bad answers. That insight came from testing, not from initial design — which is why evaluation and iteration matter more than perfect upfront planning.

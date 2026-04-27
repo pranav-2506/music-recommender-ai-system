@@ -2,17 +2,19 @@
 Command line runner for the Music Recommender Simulation.
 
 Run from the project root:
-    python -m src.main
+    python -m src.main              # Interactive mode
+    python -m src.main --batch      # Run predefined profiles
 """
 
 import sys
 import os
 
-# Ensure 'src/' is on the path so 'recommender' can be imported
-# regardless of how this module is invoked.
+# Ensure 'src/' is on the path so modules can be imported
 sys.path.insert(0, os.path.dirname(__file__))
 
+from dotenv import load_dotenv
 from recommender import load_songs, recommend_songs
+from agent import run_agent
 
 # ---------------------------------------------------------------------------
 # User profiles to evaluate
@@ -80,14 +82,51 @@ def print_profile(label: str, prefs: dict, songs: list, weights=None) -> None:
 # Main
 # ---------------------------------------------------------------------------
 
-def main() -> None:
-    songs = load_songs("data/songs.csv")
+def interactive_mode(songs: list) -> None:
+    """Run interactive mode with the AI agent."""
+    load_dotenv()
 
-    # ── Standard profiles ────────────────────────────────────────────────────
+    print()
+    print("🎵 Music Recommender AI System")
+    print("=" * 56)
+    print("Describe the music you're in the mood for (type 'quit' to exit):\n")
+
+    while True:
+        user_input = input("> ").strip()
+        if user_input.lower() == "quit":
+            print("Goodbye! 👋")
+            break
+
+        if not user_input:
+            print("Please describe the music you want.\n")
+            continue
+
+        result = run_agent(user_input, songs)
+
+        print()
+        print("-" * 56)
+        if result["recommendations"]:
+            print("✨ Top Recommendations:\n")
+            for rank, (song, score, _) in enumerate(result["recommendations"], start=1):
+                print(f"  {rank}. {song['title']} — {song['artist']}")
+                print(f"     Genre: {song['genre']} | Mood: {song['mood']} | Score: {score:.2f}\n")
+
+            print(f"💭 Why: {result['explanation']}\n")
+            print(f"📊 Confidence: {result['confidence']:.0%}")
+            if result["warning"]:
+                print(f"   {result['warning']}")
+        else:
+            print(f"❌ {result['explanation']}\n")
+
+        print("-" * 56)
+        print()
+
+
+def batch_mode(songs: list) -> None:
+    """Run batch mode with predefined profiles."""
     for profile in PROFILES:
         print_profile(profile["label"], profile["prefs"], songs)
 
-    # ── Experiment: weight shift on Profile 1 ────────────────────────────────
     print()
     print("*" * 56)
     print("  EXPERIMENT — Double Energy Weight / Halve Genre Weight")
@@ -100,6 +139,15 @@ def main() -> None:
         songs,
         weights=EXPERIMENT_WEIGHTS,
     )
+
+
+def main() -> None:
+    songs = load_songs("data/songs.csv")
+
+    if "--batch" in sys.argv:
+        batch_mode(songs)
+    else:
+        interactive_mode(songs)
 
 
 if __name__ == "__main__":

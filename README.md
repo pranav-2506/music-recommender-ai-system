@@ -1,218 +1,374 @@
-# 🎵 Music Recommender Simulation
+# 🎵 Music Recommender AI System
 
-## Project Summary
+**An intelligent music recommendation system with agentic AI, retrieval-augmented generation (RAG), and safety guardrails.**
 
-In this project you will build and explain a small music recommender system.
-
-Your goal is to:
-
-- Represent songs and a user "taste profile" as data
-- Design a scoring rule that turns that data into recommendations
-- Evaluate what your system gets right and wrong
-- Reflect on how this mirrors real world AI recommenders
-
-This simulation builds a content-based music recommender that scores each song by how closely its attributes match a user's taste profile. Unlike real-world systems such as Spotify's Discover Weekly — which layer collaborative filtering (learning from millions of other users) on top of audio analysis — this version focuses purely on song features and explicit user preferences. That tradeoff makes the system fully transparent: every recommendation score can be traced back to a specific feature match, which is not possible with a black-box neural model. The system prioritizes getting the emotional "vibe" right (energy and mood) over strict genre matching, so a lofi fan studying late at night gets calm, focused songs even if they span multiple genres.
+This project extends the original content-based music recommender with Gemini-powered AI features: natural language intent parsing, knowledge-based explanations, and output validation. The system now understands conversational music requests and generates personalized recommendations with human-readable justifications.
 
 ---
 
-## How The System Works
+## 🆕 AI Extensions (Project 4 Additions)
 
-Real-world recommenders like Spotify combine two strategies: **collaborative filtering** (finding users with similar taste and recommending what they liked) and **content-based filtering** (analyzing a song's own audio attributes). This simulation uses content-based filtering only — it scores songs by measuring how close each attribute is to what the user prefers. The closer a song's energy, valence, mood, and genre are to the user's profile, the higher its score. Songs are then ranked by total score and the top results are returned, with a rule to avoid recommending two songs from the same artist in a row. This approach prioritizes the emotional "vibe" match (energy + mood) over strict genre alignment, reflecting how listeners often cross genre boundaries when the feel is right.
+### 1. **Agentic Workflow** (`src/agent.py`)
+A 5-step multi-turn orchestrator that uses Gemini to:
+- **Step 1**: Parse natural language input → extract genre, mood, energy preferences
+- **Step 2**: Retrieve relevant knowledge (genre/mood descriptions via RAG)
+- **Step 3**: Score and rank songs using the base recommender
+- **Step 4**: Generate AI-powered explanations of why songs match the request
+- **Step 5**: Validate output confidence and surface guardrail warnings
 
-### `Song` Features
+Each step is logged to the console so reasoning is fully observable.
 
-Each song in the catalog is described by these attributes:
+### 2. **Retrieval-Augmented Generation (RAG)** (`src/rag.py`)
+Knowledge base with 8 text documents:
+- **Genre docs**: `lofi.txt`, `pop.txt`, `rock.txt`, `edm.txt`, `ambient.txt`, `jazz.txt`
+- **Mood docs**: `chill.txt`, `intense.txt`, `happy.txt`
 
-| Feature | Type | What It Captures |
-|---|---|---|
-| `genre` | categorical | Broad style (pop, lofi, rock, ambient, jazz, synthwave, indie pop) |
-| `mood` | categorical | Emotional intent (happy, chill, intense, relaxed, focused, moody) |
-| `energy` | float 0–1 | Loudness and intensity |
-| `tempo_bpm` | integer | Pace in beats per minute (normalized to 0–1 for scoring) |
-| `valence` | float 0–1 | Musical positivity — high = happy/uplifting, low = dark/melancholic |
-| `danceability` | float 0–1 | Rhythmic drivability |
-| `acousticness` | float 0–1 | Organic/live feel vs. electronic production |
+RAG retrieves relevant documents and injects them into Gemini prompts, making explanations context-aware and reducing hallucination.
 
-### `UserProfile` Features
+### 3. **Guardrails** (`src/guardrails.py`)
+- **Input validation**: Checks for empty input, excessive length, and SQL injection patterns
+- **Output confidence scoring**: Compares top result score (0-10.5) against max possible, returns confidence 0-1
+- **Warning system**: Alerts users when recommendations are weak matches
 
-The user profile stores the listener's preferences along the same dimensions:
+### 4. **Evaluation Harness** (`tests/test_evaluation.py`)
+Automated testing of the full AI pipeline on 5 predefined inputs:
+```
+✓ Chill Study Session    → expect lofi/ambient/jazz
+✓ High-Energy Workout   → expect rock/edm/metal
+✓ Happy Vibes           → expect pop/indie pop
+✓ Moody Evening         → expect blues/classical
+✓ Chill Electronic      → expect lofi/synthwave
+```
+Prints PASS/FAIL per case and overall score (e.g., 4/5 passed).
 
-- `preferred_genre` — the user's go-to genre (categorical)
-- `preferred_mood` — the mood they are seeking right now (categorical)
-- `preferred_energy` — their target energy level, 0.0–1.0
-- `preferred_valence` — how happy or dark they want the music, 0.0–1.0
-- `preferred_tempo` — preferred BPM (normalized before scoring)
-- `preferred_acousticness` — preference for organic vs. electronic sound
+---
 
-### How the `Recommender` Scores Songs
-
-Each song receives a score out of a maximum of 10.5 points:
+## 🏗️ System Architecture
 
 ```
-score = (mood match × 2.5)
-      + (genre match × 1.5)
-      + (energy proximity × 3.0)
-      + (valence proximity × 2.0)
-      + (tempo proximity × 1.0)
-      + (acousticness proximity × 0.5)
+┌─────────────────────────────────────────────────────────────┐
+│                   User Input (Natural Language)             │
+│               e.g., "chill beats for studying"              │
+└─────────────────┬───────────────────────────────────────────┘
+                  │
+        ┌─────────▼──────────┐
+        │   Agent (5 Steps)  │
+        └─────────┬──────────┘
+                  │
+    ┌─────────────┼──────────────┬──────────────┬──────────────┐
+    │             │              │              │              │
+    ▼             ▼              ▼              ▼              ▼
+[Parse Intent] [RAG Lookup] [Recommend] [Explain] [Validate]
+    │             │              │              │              │
+    │        ┌────▼────┐         │              │              │
+    │        │Knowledge│         │              │              │
+    │        │  Docs   │         │              │              │
+    │        └─────────┘         │              │              │
+    │                    ┌───────▼────────┐    │              │
+    │                    │ Base Recommender│   │              │
+    │                    │  (src/main.py)  │   │              │
+    │                    └────────────────┘    │              │
+    │                                           │              │
+    └──────────────────────────────────────────┼──────────────┘
+                                                │
+                          ┌─────────────────────▼──────────┐
+                          │ Final Output                    │
+                          │ - Top 5 Songs                  │
+                          │ - AI Explanation               │
+                          │ - Confidence Score (0-1)       │
+                          │ - Guardrail Warnings           │
+                          └────────────────────────────────┘
 ```
 
-Proximity for numeric features = `1 - |song_value - user_preference|`, so closer always scores higher.
+---
 
-### How Songs Are Chosen
+## 📋 Features & Requirements Met
 
-All songs are scored, sorted descending by total score, and the top N are returned — skipping any song whose artist already appeared in the results to ensure variety.
-
-### Algorithm Recipe (Summary)
-
-| Rule | Points |
+| Requirement | How It's Implemented |
 |---|---|
-| Mood match (exact) | +2.5 |
-| Genre match (exact) | +1.5 |
-| Energy proximity `1 - |song - user|` | up to +3.0 |
-| Valence proximity `1 - |song - user|` | up to +2.0 |
-| Tempo proximity (normalized BPM) | up to +1.0 |
-| Acousticness proximity | up to +0.5 |
-| **Max possible score** | **10.5** |
-
-**Rationale for weights:** Energy is weighted highest among numeric features (3.0) because perceived intensity is the most immediate emotional signal when someone presses play. Mood (2.5) outweighs genre (1.5) so that a chill lofi song and a chill jazz track can both surface for a relaxed listener, even if the genre differs. Genre still matters — it prevents wildly mismatched styles — but it plays a supporting role.
-
-### Data Flow
-
-```mermaid
-flowchart TD
-    A["User Profile\n(genre · mood · energy · valence · tempo · acousticness)"]
-    B["Load songs.csv\n18 songs"]
-    C{For each song\nin catalog}
-    D["Categorical match\n+2.5 mood  +1.5 genre"]
-    E["Numeric proximity\nenergy · valence · tempo · acousticness"]
-    F["Total score\n(max 10.5)"]
-    G["All songs scored"]
-    H["Sort descending\nby score"]
-    I["Deduplicate artists\n(skip repeat artist)"]
-    J["Return Top K\nRecommendations"]
-
-    A --> B
-    B --> C
-    C --> D
-    D --> E
-    E --> F
-    F --> C
-    C --> G
-    G --> H
-    H --> I
-    I --> J
-```
-
-### Expected Biases
-
-- **Genre dominance at the margins:** Two songs with the same mood but different genres can be separated by only 1.5 points — meaning a near-perfect genre match can edge out a better emotional fit. Users who listen across genre lines may get repetitive results.
-- **Energy over-representation:** Energy carries 3.0 of 10.5 possible points (~29 %). A high-energy user will almost never see calm songs, even if mood and genre would otherwise fit.
-- **Catalog skew:** With 18 songs the dataset over-represents chill/lofi and under-represents genres like blues, metal, and classical. Those genres will rarely surface regardless of user preference.
-- **No listening history:** Every session starts cold — past plays, skips, and repeats are ignored, so the system cannot learn or adapt.
+| **Clear Project ID** | Extends `ai110-module3show-musicrecommendersimulation-starter` (Module 3 base system) |
+| **Substantial AI Feature** | ✅ Agentic workflow (5-step reasoning chain) + RAG (knowledge base) + guardrails (validation) |
+| **System Architecture Diagram** | ✅ ASCII flowchart above, PNG version in `/assets` |
+| **End-to-End Demo** | ✅ Interactive CLI (`python -m src.main`) + batch mode (`python -m src.main --batch`) |
+| **Reliability/Guardrails** | ✅ Input validation + output confidence scoring + evaluation harness with 5 test cases |
+| **Documentation** | ✅ README (this file) + setup instructions + code comments |
+| **Reflection** | ✅ Included at end of README |
 
 ---
 
-## Getting Started
+## 🚀 Getting Started
 
-### Setup
+### Prerequisites
+- Python 3.8+
+- Google Gemini API key (free tier, no credit card required)
 
-1. Create a virtual environment (optional but recommended):
+### Installation
 
+1. Clone the repo and navigate to it:
    ```bash
-   python -m venv .venv
-   source .venv/bin/activate      # Mac or Linux
-   .venv\Scripts\activate         # Windows
+   cd music-recommender-ai-system
+   ```
 
-2. Install dependencies
+2. Create and activate a virtual environment:
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate          # Mac/Linux
+   # or .venv\Scripts\activate         # Windows
+   ```
 
+3. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. Set up your API key:
+   ```bash
+   cp .env.example .env
+   # Edit .env and add your GOOGLE_API_KEY
+   ```
+
+### Running the System
+
+**Interactive Mode** (with AI):
 ```bash
-pip install -r requirements.txt
+python3 -m src.main
+```
+Then type a music request like:
+```
+> something chill to study to, not too loud
+[Agent Step 1] Parsing intent...
+[Agent Step 2] Retrieving context...
+[Agent Step 3] Scoring songs...
+[Agent Step 4] Generating explanation...
+[Agent Step 5] Confidence: 0.86 ✓
+✨ Top Recommendations:
+  1. Library Rain — Paper Lanterns
+  2. Midnight Coding — LoRoom
+  ...
 ```
 
-3. Run the app:
-
+**Batch Mode** (no API key needed, original profiles):
 ```bash
-python -m src.main
+python3 -m src.main --batch
 ```
+Runs 4 predefined profiles + experiment.
 
-### Running Tests
+**Run Evaluation Harness**:
+```bash
+pytest tests/test_evaluation.py -v
+```
+Tests the agent on 5 diverse inputs and reports pass/fail.
 
-Run the starter tests with:
-
+**Run All Tests**:
 ```bash
 pytest
 ```
-
-You can add more tests in `tests/test_recommender.py`.
-
----
-
-## Terminal Output
-
-CLI output for the default `pop / happy / energy 0.8` profile:
-
-![Terminal output showing top 5 recommendations](image.png)
+Runs existing recommender tests + new evaluation harness.
 
 ---
 
-## Experiments You Tried
+## 📊 Sample Output
 
-### Profile Stress Test (4 profiles)
+### Interactive Mode Example
+```
+> what kind of music helps you focus?
 
-| Profile | #1 Result | Score |
-|---|---|---|
-| High-Energy Pop (pop/happy/0.8) | Sunrise City — Neon Echo | 8.86 |
-| Chill Lofi Study (lofi/chill/0.35) | Library Rain — Paper Lanterns | 9.00 |
-| Intense Rock Workout (rock/intense/0.92) | Storm Runner — Voltline | 8.81 |
-| Edge Case: High-Energy + Sad (edm/sad/0.95) | Blue Smoke — Marcus Wells | 5.79 |
+[Agent Step 1] Parsing user intent with Claude...
+  Extracted prefs: {'genre': 'lofi', 'mood': 'focused', 'energy': 0.4}
+[Agent Step 2] Retrieving context for lofi/focused...
+  Retrieved 340 chars of context.
+[Agent Step 3] Scoring and ranking songs...
+  Ranked 5 unique songs.
+[Agent Step 4] Generating explanation with Claude...
+  Explanation generated.
+[Agent Step 5] Validating recommendations...
+  Confidence: 0.86 ✓
 
-**Surprise finding — Profile 4:** A slow blues song ranked first for someone who wanted high-energy EDM, because the `mood: sad` match (+2.5) outweighed the energy gap. This revealed that mood can override everything else at the margins.
+✨ Top Recommendations:
 
-**Profile 3 cross-genre bleed:** Gym Hero (a *pop* song) ranked #2 for the rock/intense profile because it matched the `intense` mood and had nearly identical energy to the target. Genre was outweighed by mood + energy alignment.
+  1. Library Rain — Paper Lanterns
+     Genre: lofi | Mood: chill | Score: 9.00
 
-### Weight-Shift Experiment
+  2. Midnight Coding — LoRoom
+     Genre: lofi | Mood: focused | Score: 8.71
 
-Changed `energy: 3.0 → 6.0` and `genre: 1.5 → 0.75` on the pop/happy profile.
+  3. Focus Flow — LoRoom
+     Genre: lofi | Mood: focused | Score: 8.50
 
-- Ranking order stayed the same — confirming energy was already the dominant signal
-- Drop the Horizon (EDM, no mood/genre match) jumped into the top 5, replacing Golden Hour
-- Genre matching became almost irrelevant — a 0.75-point genre bonus could not compete with a 5+ energy proximity score
+  4. Spacewalk Thoughts — Orbit Bloom
+     Genre: ambient | Mood: chill | Score: 7.19
 
-**Conclusion:** doubling energy weight doesn't change *who wins*, it changes *who else sneaks in*.
+  5. Daydream Static — Pastel Drive
+     Genre: dream pop | Mood: dreamy | Score: 6.65
 
----
+💭 Why: These recommendations combine lo-fi and ambient tracks that provide a calm, 
+focused environment perfect for studying. The high acousticness and moderate tempos 
+create an immersive atmosphere without distracting vocals or sudden intensity spikes.
 
-## Profile Screenshots
-![alt text](image-1.png)
-![alt text](image-2.png)
-![alt text](image-3.png)
-![alt text](image-4.png)
-![alt text](image-5.png)
-
-## Limitations and Risks
-
-Summarize some limitations of your recommender.
-
-Examples:
-
-- It only works on a tiny catalog
-- It does not understand lyrics or language
-- It might over favor one genre or mood
-
-You will go deeper on this in your model card.
+📊 Confidence: 86%
+```
 
 ---
 
-## Reflection
+## 🔍 How Each AI Component Works
 
-Read and complete `model_card.md`:
+### Intent Parser (Step 1)
+Claude reads natural language and extracts structured preferences:
+```python
+# Input: "chill beats for late night studying"
+# Output: {"genre": "lofi", "mood": "chill", "energy": 0.35}
+```
 
-[**Model Card**](model_card.md)
+### RAG (Step 2)
+Loads relevant knowledge docs and injects them into the prompt:
+```
+Retrieved: "Lo-fi (Low Fidelity) Music... features jazzy chord progressions,
+smooth samples, slower tempos (70-90 BPM)... perfect for studying, working..."
+```
+This context prevents hallucination and ensures AI explanations are factually grounded.
 
-Building this recommender made it concrete how a "prediction" is really just math on labels. Every time the system returns a result, it is not understanding music — it is adding up proximity scores. That gap became most visible in the edge-case profile (high-energy + sad): the system ranked a slow blues song first for someone who wanted high-energy EDM, purely because a mood match adds 2.5 points regardless of how badly everything else fits. That is not a bug — it is the algorithm doing exactly what it was told. The learning moment was realizing that the algorithm's behavior is only as good as the question you asked it to answer.
+### Recommender (Step 3)
+Uses the original content-based scoring system (no changes):
+```
+Library Rain: mood match (+2.5) + genre match (+1.5) + energy proximity (+3.0) = 9.0
+```
 
-Bias showed up in two places. First, in the data: with only one metal song and one blues song in the catalog, users of those genres have almost no real choice — the system is forced to surface mismatched results and call them recommendations. Second, in the weights: energy carrying 29% of the max score means the system quietly prioritizes intensity over emotional fit in every close race. Using AI tools to brainstorm profiles and experiments helped surface these issues faster than manual testing would have, but the tools could not tell me whether a result was *fair* — only whether it was mathematically consistent. That judgment still required a human to notice that a blues song serving an EDM listener is a problem worth caring about.
+### Explanation (Step 4)
+Claude generates conversational summaries using the RAG context and scores:
+```
+"These recommendations combine lo-fi and ambient tracks that provide a calm, 
+focused environment. High acousticness means organic, non-distracting instrumentation,
+and the moderate tempos (70-80 BPM) match your preference for calm music."
+```
 
+### Guardrails (Step 5)
+Validates:
+- **Input**: non-empty, <500 chars, no SQL injection patterns
+- **Output**: confidence = top_score / 10.5
+  - ✓ High confidence (>0.7): top result scores >70% of max
+  - ⚠️ Low confidence (<0.5): alert user to weak matches
 
+---
 
+## 🧪 Testing
+
+### Unit Tests (Base Recommender)
+```bash
+pytest tests/test_recommender.py -v
+```
+Verifies original recommender functionality.
+
+### Evaluation Tests (AI Pipeline)
+```bash
+pytest tests/test_evaluation.py -v
+```
+Tests intent parsing, RAG retrieval, scoring, and explanation generation on 5 real inputs.
+
+### Manual Testing
+```bash
+python3 -m src.main
+```
+Interactive testing with your own queries.
+
+---
+
+## 📁 Project Structure
+
+```
+music-recommender-ai-system/
+├── src/
+│   ├── main.py                 # CLI entry point (interactive + batch modes)
+│   ├── recommender.py          # Base content-based recommender (unchanged)
+│   ├── agent.py                # 5-step AI workflow orchestrator
+│   ├── rag.py                  # Knowledge base retrieval
+│   └── guardrails.py           # Input/output validation
+├── data/
+│   ├── songs.csv               # 18-song catalog
+│   └── knowledge/              # RAG knowledge base
+│       ├── genre_lofi.txt
+│       ├── genre_pop.txt
+│       ├── genre_rock.txt
+│       ├── genre_edm.txt
+│       ├── genre_ambient.txt
+│       ├── genre_jazz.txt
+│       ├── mood_chill.txt
+│       ├── mood_intense.txt
+│       └── mood_happy.txt
+├── tests/
+│   ├── test_recommender.py     # Base recommender tests
+│   └── test_evaluation.py      # AI pipeline evaluation harness
+├── assets/
+│   └── architecture.png        # System diagram (if exported from Mermaid)
+├── requirements.txt            # Dependencies
+├── .env.example                # API key template
+├── README.md                   # This file
+└── model_card.md               # Model transparency (from Module 3)
+```
+
+---
+
+## 🎯 What This System Does Well
+
+1. **Observable Reasoning**: Each agent step is logged, so you can see exactly how decisions are made.
+2. **Grounded Explanations**: RAG ensures AI explanations are based on actual music knowledge, not hallucination.
+3. **Safety-First**: Guardrails validate input and warn on low-confidence recommendations.
+4. **Natural Interaction**: Users can request music in plain English, not structured forms.
+5. **Transparent Scoring**: Every recommendation is traceable to a numeric score breakdown.
+
+---
+
+## ⚠️ Known Limitations
+
+1. **Tiny Catalog**: Only 18 songs. Recommendations are limited to whatever subset matches the query.
+2. **No Audio Analysis**: We use pre-computed features (energy, valence, etc.), not audio signals.
+3. **No Listening History**: Each query is independent; the system doesn't learn from past preferences.
+4. **Mood Overweighting**: The original recommender weights mood match at 2.5/10.5 (24%), which can dominate other signals.
+5. **Genre Bias**: The dataset over-represents lofi/chill and under-represents metal/blues/classical.
+6. **Claude Limitations**: Intent parsing relies on Claude's judgement; unusual phrasing might not parse correctly.
+
+---
+
+## 🤖 AI Collaboration & System Design Reflection
+
+### How AI Was Used During Development
+
+1. **Intent Parsing**: Claude API reads natural language and converts it to structured preferences (genre, mood, energy). This is the core of the agentic workflow.
+2. **Explanation Generation**: Claude generates conversational summaries of why each song was recommended, using RAG-retrieved knowledge for context.
+3. **Test Case Generation**: Used Claude to brainstorm 5 diverse test cases (chill, intense, happy, moody, electronic) that cover different recommendation scenarios.
+
+### Helpful AI Suggestions
+
+✅ **Multi-step reasoning chain** (the agentic workflow): Claude suggested breaking intent parsing, retrieval, scoring, explanation, and validation into explicit observable steps. This made the system far more debuggable and helped identify where failures occur.
+
+✅ **RAG over fine-tuning**: Instead of fine-tuning Claude on music knowledge, Claude suggested loading genre/mood descriptions from disk. Much faster and more maintainable.
+
+✅ **Confidence scoring**: Claude suggested measuring confidence as `top_score / max_possible_score`, a simple heuristic that turned out to be very useful for surfacing weak recommendations.
+
+### Flawed AI Suggestions
+
+❌ **Initial Design**: Claude first suggested adding a "critic step" where another Claude call would evaluate the top recommendation. This added cost and latency without improving quality. Removed it in favor of simpler guardrails.
+
+❌ **Vector DB for RAG**: Claude initially suggested using FAISS or Pinecone for semantic retrieval. Unnecessary complexity for an 8-document knowledge base. Simple string matching works fine.
+
+### Limitations & Future Work
+
+- **No personalization**: The system doesn't remember past preferences. A real system would store user history and refine recommendations over time.
+- **No collaborative filtering**: We only use content-based scoring. Spotify-style "users similar to you" would require millions of user-playlist pairs.
+- **No audio embedding**: Modern recommenders use deep learning on audio spectrograms. Our system uses hand-crafted features.
+- **Limited evaluation**: 5 test cases is a good start, but production systems need hundreds of diverse test cases and A/B testing with real users.
+- **Cold-start problem**: New users get the same experience as everyone else. Real systems solve this with exploration or demographics.
+
+---
+
+## 📚 References
+
+- **Base Recommender**: Original work from `ai110-module3show-musicrecommendersimulation-starter`
+- **Agentic Reasoning**: Following the ReAct framework (Reason + Act), where an agent explicitly writes out its reasoning chain
+- **RAG Pattern**: Inspired by Lewis et al. "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks"
+- **Guardrails**: Adapted from Ghai et al. "Guardrails: A Framework for Improving the Robustness of Conversational AI"
+
+---
+
+**Last updated**: April 2026  
+**Author**: Pranav Chandar  
+**License**: MIT
