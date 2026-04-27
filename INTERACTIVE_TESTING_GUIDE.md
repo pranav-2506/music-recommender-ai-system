@@ -402,17 +402,5 @@ pytest tests/test_evaluation.py -v
 
 This runs 5 scenarios (chill study, high-energy workout, happy vibes, etc.) and reports PASS/FAIL for each.
 
----
-
-## Optional: Record a Demo Video
-
-For your portfolio, consider recording a short Loom video (2-3 min) showing:
-- 2-3 different music requests
-- All 5 agent steps executing in real-time
-- The final recommendations + confidence scores
-
-This is optional but great for demonstrating the system to others.
-
----
 
 **Happy testing!** 🎵
