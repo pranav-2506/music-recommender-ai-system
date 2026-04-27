@@ -392,26 +392,27 @@ After testing, you should see:
 - ✅ System gracefully handles edge cases with warnings
 - ✅ No credit card charges (free Gemini tier)
 
----
+## Optional: Run the Evaluation Harness
 
-## Next Steps
+If you want to test the system against predefined test cases:
 
-Once interactive mode works:
+```bash
+pytest tests/test_evaluation.py -v
+```
 
-1. **Run the evaluation harness** to test all 5 scenarios:
-   ```bash
-   pytest tests/test_evaluation.py -v
-   ```
-
-2. **Record a Loom video** showing 2-3 of your test inputs
-
-3. **Commit and push** to GitHub:
-   ```bash
-   git add -A
-   git commit -m "feat: switch to Gemini API (free tier)"
-   git push origin main
-   ```
+This runs 5 scenarios (chill study, high-energy workout, happy vibes, etc.) and reports PASS/FAIL for each.
 
 ---
 
-**You're all set! Enjoy testing!** 🎵
+## Optional: Record a Demo Video
+
+For your portfolio, consider recording a short Loom video (2-3 min) showing:
+- 2-3 different music requests
+- All 5 agent steps executing in real-time
+- The final recommendations + confidence scores
+
+This is optional but great for demonstrating the system to others.
+
+---
+
+**Happy testing!** 🎵
